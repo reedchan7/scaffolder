@@ -11,5 +11,7 @@ ci = "github"
 installers = ["shell", "powershell"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu", "aarch64-pc-windows-msvc", "x86_64-pc-windows-msvc"]
-# Bundle a self-updater so `scaffolder self-update` works
-install-updater = true
+# Don't ship cargo-dist's standalone updater binary: it isn't available for
+# aarch64-pc-windows-msvc (would fail the build). `scaffolder self-update` doesn't
+# need it — it uses the axoupdater library + install receipt directly.
+install-updater = false
