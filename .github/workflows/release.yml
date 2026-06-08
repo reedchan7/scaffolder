@@ -67,9 +67,17 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - name: Cache cargo-dist binary
+        id: cache-dist
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dist
+          key: cargo-dist-bin-0.32.0-${{ runner.os }}-${{ runner.arch }}
       - name: Install dist
         # Install from crates.io instead of the GitHub release CDN (which has had
         # sustained 504s). Reliable and uniform across every runner OS.
+        # Skipped when the compiled binary was restored from cache above.
+        if: steps.cache-dist.outputs.cache-hit != 'true'
         run: cargo install cargo-dist --version 0.32.0 --locked
       - name: Cache dist
         uses: actions/upload-artifact@v7
@@ -133,9 +141,19 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
+      - name: Cache cargo-dist binary
+        id: cache-dist
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/dist
+            ~/.cargo/bin/dist.exe
+          key: cargo-dist-bin-0.32.0-${{ runner.os }}-${{ runner.arch }}
       # Install from crates.io instead of the GitHub release CDN (which has had
       # sustained 504s). One command works on Linux, macOS, and Windows runners.
+      # Skipped when the compiled binary was restored from cache above.
       - name: Install dist
+        if: steps.cache-dist.outputs.cache-hit != 'true'
         run: cargo install cargo-dist --version 0.32.0 --locked
       # Get the dist-manifest
       - name: Fetch local artifacts
@@ -147,6 +165,13 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      # Cache the project's dependency builds across releases. Dependencies rarely
+      # change between tags, so the 299-crate compile is reused; only first-party
+      # code recompiles. Keyed per target so each platform keeps its own cache.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ join(matrix.targets, '-') }}
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
