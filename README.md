@@ -79,7 +79,20 @@ git hooks, a Makefile, and a test setup — ready to `make check`.
 
 ## Develop
 
+Common tasks are wrapped in a `Makefile` — run `make help` to list them:
+
 ```sh
-cargo test          # unit + integration
-cargo run -- new typescript-node demo
+make build                              # release binary -> target/release/scaffolder
+make test                               # unit + integration tests
+make check                              # fmt + clippy + tests (what CI runs)
+make install                            # build & install to /usr/local/bin (override: BINDIR=...)
+make run ARGS="new typescript-node demo"
+```
+
+### Cutting a release
+
+```sh
+make bump VERSION=0.2.0                  # update the version in Cargo.toml
+git commit -am "chore: release v0.2.0"
+make release                            # tag v0.2.0 and push -> CI builds & publishes
 ```
