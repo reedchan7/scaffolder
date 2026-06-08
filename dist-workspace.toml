@@ -15,3 +15,7 @@ targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux
 # aarch64-pc-windows-msvc (would fail the build). `scaffolder self-update` doesn't
 # need it — it uses the axoupdater library + install receipt directly.
 install-updater = false
+# We manually hardened .github/workflows/release.yml (dist install retries +
+# crates.io fallback for GitHub release-CDN 504s). Tell dist not to fail its
+# in-CI "workflow is out of date" check for these intentional edits.
+allow-dirty = ["ci"]
