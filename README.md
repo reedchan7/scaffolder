@@ -96,3 +96,7 @@ make bump VERSION=0.2.0                  # update the version in Cargo.toml
 git commit -am "chore: release v0.2.0"
 make release                            # tag v0.2.0 and push -> CI builds & publishes
 ```
+
+## License
+
+[MIT](LICENSE) © Reed Chan
