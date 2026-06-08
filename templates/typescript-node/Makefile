@@ -1,27 +1,35 @@
 PM := {{pm}}
 
-.PHONY: install dev build start test lint format check
+.DEFAULT_GOAL := help
+.PHONY: help install dev build start typecheck test lint format check
 
-install:
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+
+install: ## Install dependencies
 	$(PM) install
 
-dev:
+dev: ## Run in watch mode (tsx)
 	$(PM) run dev
 
-build:
+build: ## Compile to dist/
 	$(PM) run build
 
-start:
+start: ## Run the app (tsx, from source)
 	$(PM) run start
 
-test:
+typecheck: ## Type-check without emitting
+	$(PM) run typecheck
+
+test: ## Run tests
 	$(PM) test
 
-lint:
+lint: ## Lint with ESLint
 	$(PM) run lint
 
-format:
+format: ## Format with Prettier
 	$(PM) run format
 
-check:
+check: ## Format check + lint + typecheck + test
 	$(PM) run check
