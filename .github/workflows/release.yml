@@ -61,15 +61,9 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - name: Install dist
-        # Manual hardening: fast prebuilt install with retries; fall back to
-        # compiling from crates.io when GitHub's release CDN is 504ing.
-        shell: bash
-        run: |
-          set -o pipefail
-          if ! curl --proto '=https' --tlsv1.2 -LsSf --retry 5 --retry-all-errors --retry-delay 4 https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh; then
-            echo "::warning::prebuilt dist installer unavailable (release CDN); compiling from crates.io"
-            cargo install cargo-dist --version 0.32.0
-          fi
+        # Install from crates.io instead of the GitHub release CDN (which has had
+        # sustained 504s). Reliable and uniform across every runner OS.
+        run: cargo install cargo-dist --version 0.32.0 --locked
       - name: Cache dist
         uses: actions/upload-artifact@v7
         with:
@@ -132,22 +126,10 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
-      # NOTE: manually hardened against transient GitHub release-CDN 504s.
-      # The unix install adds curl --retry + bash pipefail so a failed download
-      # fails loudly instead of silently leaving `dist` missing. Windows keeps
-      # the generated powershell installer. `dist generate` will overwrite this.
-      - name: Install dist (non-Windows)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
-        run: |
-          set -o pipefail
-          if ! curl --proto '=https' --tlsv1.2 -LsSf --retry 5 --retry-all-errors --retry-delay 4 https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh; then
-            echo "::warning::prebuilt dist installer unavailable (release CDN); compiling from crates.io"
-            cargo install cargo-dist --version 0.32.0
-          fi
-      - name: Install dist (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        run: ${{ matrix.install_dist.run }}
+      # Install from crates.io instead of the GitHub release CDN (which has had
+      # sustained 504s). One command works on Linux, macOS, and Windows runners.
+      - name: Install dist
+        run: cargo install cargo-dist --version 0.32.0 --locked
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@v8
