@@ -39,6 +39,8 @@ pub struct NewArgs {
     /// Node major version (integer only, e.g. 24).
     #[arg(long, default_value = "24")]
     pub node: String,
+    /// Open-source license for the project. Omit this flag to keep the project
+    /// private (sets "private": true in package.json, no LICENSE file).
     #[arg(long, value_enum)]
     pub license: Option<License>,
     /// Also generate CLAUDE.md + AGENTS.md AI guideline files.
