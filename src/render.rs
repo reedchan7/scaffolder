@@ -115,14 +115,18 @@ pub fn build_package_json(cfg: &ScaffoldConfig) -> String {
     // `node --watch src/index.ts` which breaks under type=commonjs and old Node.
     scripts.insert("dev".into(), json!("tsx watch src/index.ts"));
     scripts.insert("build".into(), json!("tsc"));
-    scripts.insert("start".into(), json!("node dist/index.js"));
+    scripts.insert("typecheck".into(), json!("tsc --noEmit"));
+    // Run from source via tsx so `start` works out of the box without a prior
+    // build. (A bare `node dist/index.js` fails until `build` runs, and a
+    // `prestart` hook is unreliable: pnpm/yarn skip pre/post scripts by default.)
+    scripts.insert("start".into(), json!("tsx src/index.ts"));
     scripts.insert("test".into(), json!(cfg.test.test_script()));
     scripts.insert("lint".into(), json!("eslint ."));
     scripts.insert("format".into(), json!("prettier --write ."));
     scripts.insert(
         "check".into(),
         json!(format!(
-            "prettier --check . && eslint . && {}",
+            "prettier --check . && eslint . && tsc --noEmit && {}",
             cfg.test.test_script()
         )),
     );
@@ -421,6 +425,26 @@ mod pkg_tests {
         assert_eq!(
             json(&base())["scripts"]["prepare"],
             serde_json::json!("lefthook install || true")
+        );
+    }
+
+    #[test]
+    fn start_runs_from_source_so_no_build_is_required() {
+        // A bare `node dist/index.js` would fail before `build` ever ran; tsx
+        // keeps `start` working on a freshly scaffolded project.
+        assert_eq!(
+            json(&base())["scripts"]["start"],
+            serde_json::json!("tsx src/index.ts")
+        );
+    }
+
+    #[test]
+    fn check_includes_typecheck() {
+        let v = json(&base());
+        assert_eq!(v["scripts"]["typecheck"], serde_json::json!("tsc --noEmit"));
+        assert_eq!(
+            v["scripts"]["check"],
+            serde_json::json!("prettier --check . && eslint . && tsc --noEmit && vitest run")
         );
     }
 }
