@@ -4,16 +4,52 @@ Multi-language project scaffolder. First template: TypeScript + Node.js.
 
 ## Install
 
-macOS / Linux:
+### macOS / Linux
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/reedchan7/ts-scaffold/releases/latest/download/scaffolder-installer.sh | sh
+curl -fsSL https://raw.githubusercontent.com/reedchan7/scaffolder/main/install.sh | sh
 ```
 
-Windows (PowerShell):
+This detects your OS and CPU architecture, downloads the matching prebuilt
+binary, and installs it to `/usr/local/bin`. Re-run it any time to update.
+
+Customize the version or install location:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/reedchan7/scaffolder/main/install.sh \
+  | sh -s -- --version v0.1.0 --bin-dir "$HOME/.local/bin"
+```
+
+| Option | Env var | Default |
+|--------|---------|---------|
+| `--version <tag>` | `SCAFFOLDER_VERSION` | `latest` |
+| `--bin-dir <dir>` | `SCAFFOLDER_INSTALL_DIR` | `/usr/local/bin` |
+
+### Windows (PowerShell)
 
 ```powershell
-irm https://github.com/reedchan7/ts-scaffold/releases/latest/download/scaffolder-installer.ps1 | iex
+irm https://github.com/reedchan7/scaffolder/releases/latest/download/scaffolder-installer.ps1 | iex
+```
+
+### Manual download
+
+Grab a prebuilt archive from the [latest release][releases], extract it, and put
+the `scaffolder` binary on your `PATH`:
+
+| OS | x86_64 / AMD64 | aarch64 / ARM64 |
+|----|----------------|-----------------|
+| Linux | `scaffolder-x86_64-unknown-linux-gnu.tar.xz` | `scaffolder-aarch64-unknown-linux-gnu.tar.xz` |
+| macOS | `scaffolder-x86_64-apple-darwin.tar.xz` | `scaffolder-aarch64-apple-darwin.tar.xz` |
+| Windows | `scaffolder-x86_64-pc-windows-msvc.zip` | `scaffolder-aarch64-pc-windows-msvc.zip` |
+
+[releases]: https://github.com/reedchan7/scaffolder/releases
+
+## Update
+
+Re-run the install command above, or use the built-in self-updater:
+
+```sh
+scaffolder self-update
 ```
 
 ## Usage

@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "Multi-language project scaffolder (TypeScript + Node.js first)"
 license = "MIT"
-repository = "https://github.com/reedchan7/ts-scaffold"
+repository = "https://github.com/reedchan7/scaffolder"
 readme = "README.md"
 
 [[bin]]
