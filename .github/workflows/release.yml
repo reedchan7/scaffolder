@@ -63,8 +63,9 @@ jobs:
       - name: Install dist
         # we specify bash to get pipefail; it guards against the `curl` command
         # failing. otherwise `sh` won't catch that `curl` returned non-0
+        # NOTE: --retry flags added manually to survive transient release-CDN 504s.
         shell: bash
-        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
+        run: "curl --proto '=https' --tlsv1.2 -LsSf --retry 7 --retry-all-errors --retry-delay 5 https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
       - name: Cache dist
         uses: actions/upload-artifact@v7
         with:
@@ -127,7 +128,16 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
-      - name: Install dist
+      # NOTE: manually hardened against transient GitHub release-CDN 504s.
+      # The unix install adds curl --retry + bash pipefail so a failed download
+      # fails loudly instead of silently leaving `dist` missing. Windows keeps
+      # the generated powershell installer. `dist generate` will overwrite this.
+      - name: Install dist (non-Windows)
+        if: ${{ runner.os != 'Windows' }}
+        shell: bash
+        run: "curl --proto '=https' --tlsv1.2 -LsSf --retry 7 --retry-all-errors --retry-delay 5 https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
+      - name: Install dist (Windows)
+        if: ${{ runner.os == 'Windows' }}
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
       - name: Fetch local artifacts
