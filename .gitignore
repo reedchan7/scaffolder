@@ -1,5 +1,6 @@
 /target
 /.sandbox
+/.codegraph
 
 # Local-only planning/spec docs (not for Git)
 /docs/superpowers/

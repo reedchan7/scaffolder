@@ -45,11 +45,18 @@ pub struct RenderCtx {
 
 impl ScaffoldConfig {
     pub fn render_ctx(&self) -> RenderCtx {
+        // Bun resolves relative imports without a file extension (bundler
+        // resolution), so drop the `.js` suffix the Node toolchain requires.
+        let import_ext = if self.pm == PackageManager::Bun {
+            String::new()
+        } else {
+            self.module.import_ext().to_string()
+        };
         RenderCtx {
             name: self.name.clone(),
             node: self.node,
             pm: self.pm.bin().to_string(),
-            import_ext: self.module.import_ext().to_string(),
+            import_ext,
             year: current_year(),
         }
     }
@@ -104,47 +111,92 @@ pub fn build_package_json(cfg: &ScaffoldConfig) -> String {
         "packageManager".into(),
         json!(cfg.pm.package_manager_field()),
     );
-    root.insert(
-        "engines".into(),
-        json!({ "node": format!(">={}", cfg.node) }),
-    );
+    let is_bun = cfg.pm == PackageManager::Bun;
+    // Bun is its own runtime and ignores `engines.node`; emit it only for the
+    // Node-targeting package managers where it actually constrains installs.
+    if !is_bun {
+        root.insert(
+            "engines".into(),
+            json!({ "node": format!(">={}", cfg.node) }),
+        );
+    }
     root.insert("main".into(), json!("dist/index.js"));
 
     let mut scripts = Map::new();
-    // tsx runs TS directly for both esm and cjs and across Node versions, unlike
-    // `node --watch src/index.ts` which breaks under type=commonjs and old Node.
-    scripts.insert("dev".into(), json!("tsx watch src/index.ts"));
-    scripts.insert("build".into(), json!("tsc"));
-    scripts.insert("typecheck".into(), json!("tsc --noEmit"));
-    // Run from source via tsx so `start` works out of the box without a prior
-    // build. (A bare `node dist/index.js` fails until `build` runs, and a
-    // `prestart` hook is unreliable: pnpm/yarn skip pre/post scripts by default.)
-    scripts.insert("start".into(), json!("tsx src/index.ts"));
+    // Bun runs TS directly, so it needs no tsx. For the Node toolchain, tsx runs
+    // TS across esm/cjs and Node versions, unlike `node --watch src/index.ts`
+    // which breaks under type=commonjs and old Node.
+    let (dev, build, typecheck, start, lint, format) = if is_bun {
+        (
+            "bun --watch run src/index.ts",
+            "bun build ./src/index.ts --outdir ./dist --target bun",
+            "bun run --bun tsc --noEmit",
+            "bun run src/index.ts",
+            "bun run --bun biome lint .",
+            "bun run --bun biome format --write .",
+        )
+    } else {
+        (
+            "tsx watch src/index.ts",
+            "tsc",
+            "tsc --noEmit",
+            "tsx src/index.ts",
+            "eslint .",
+            "prettier --write .",
+        )
+    };
+    scripts.insert("dev".into(), json!(dev));
+    scripts.insert("build".into(), json!(build));
+    scripts.insert("typecheck".into(), json!(typecheck));
+    // Run from source so `start` works out of the box without a prior build.
+    // (A bare `node dist/index.js` fails until `build` runs, and a `prestart`
+    // hook is unreliable: pnpm/yarn skip pre/post scripts by default.)
+    scripts.insert("start".into(), json!(start));
     scripts.insert("test".into(), json!(cfg.test.test_script()));
-    scripts.insert("lint".into(), json!("eslint ."));
-    scripts.insert("format".into(), json!("prettier --write ."));
-    scripts.insert(
-        "check".into(),
-        json!(format!(
+    scripts.insert("lint".into(), json!(lint));
+    scripts.insert("format".into(), json!(format));
+    let check = if is_bun {
+        "bun run --bun biome check . && bun run --bun tsc --noEmit && bun test".to_string()
+    } else {
+        format!(
             "prettier --check . && eslint . && tsc --noEmit && {}",
             cfg.test.test_script()
-        )),
-    );
-    // `|| true` so a missing git repo (e.g. --no-git, or CI installs) never
-    // fails the whole install; hooks still install normally when git is present.
-    scripts.insert("prepare".into(), json!("lefthook install || true"));
+        )
+    };
+    scripts.insert("check".into(), json!(check));
+    if cfg.git {
+        scripts.insert("prepare".into(), json!("lefthook install"));
+    }
     root.insert("scripts".into(), Value::Object(scripts));
 
     let mut dev = Map::new();
-    dev.insert("@eslint/js".into(), json!("^10.0.1"));
-    dev.insert("@types/node".into(), json!(format!("^{}", cfg.node)));
-    dev.insert("eslint".into(), json!("^10.4.1"));
-    dev.insert("globals".into(), json!("^17.6.0"));
+    if is_bun {
+        dev.insert("@biomejs/biome".into(), json!("2.4.16"));
+    } else {
+        dev.insert("@eslint/js".into(), json!("^10.0.1"));
+    }
+    // Bun ships its own runtime types (`@types/bun`); the others target Node.
+    if is_bun {
+        dev.insert("@types/bun".into(), json!("latest"));
+    } else {
+        dev.insert("@types/node".into(), json!(format!("^{}", cfg.node)));
+    }
+    if !is_bun {
+        dev.insert("eslint".into(), json!("^10.4.1"));
+        dev.insert("globals".into(), json!("^17.6.0"));
+    }
     dev.insert("lefthook".into(), json!("^2.1.9"));
-    dev.insert("prettier".into(), json!("^3.8.3"));
-    dev.insert("tsx".into(), json!("^4.22.4"));
+    if !is_bun {
+        dev.insert("prettier".into(), json!("^3.8.3"));
+    }
+    // tsx is only needed to run TS under the Node toolchain; Bun runs TS natively.
+    if !is_bun {
+        dev.insert("tsx".into(), json!("^4.22.4"));
+    }
     dev.insert("typescript".into(), json!("^6.0.3"));
-    dev.insert("typescript-eslint".into(), json!("^8.60.1"));
+    if !is_bun {
+        dev.insert("typescript-eslint".into(), json!("^8.60.1"));
+    }
     if cfg.test == TestFramework::Vitest {
         dev.insert("vitest".into(), json!("^4.1.8"));
     }
@@ -171,48 +223,71 @@ pub struct FileSpec {
 /// Which embedded files to emit, given the chosen options.
 /// (package.json and AI files are handled separately in scaffold.rs.)
 pub fn selected_files(cfg: &ScaffoldConfig) -> Vec<FileSpec> {
+    let is_bun = cfg.pm == PackageManager::Bun;
+    // Bun gets runtime-tuned TypeScript + Biome config; the Node toolchain keeps
+    // the ESLint/Prettier pair.
     let mut v = vec![
         FileSpec {
-            src: "tsconfig.json",
+            src: if is_bun {
+                "tsconfig.bun.json"
+            } else {
+                "tsconfig.json"
+            },
             dest: "tsconfig.json",
         },
         FileSpec {
             src: "index.ts",
             dest: "src/index.ts",
         },
-        FileSpec {
+    ];
+    if is_bun {
+        v.push(FileSpec {
+            src: "biome.json",
+            dest: "biome.json",
+        });
+        v.push(FileSpec {
+            src: "lefthook.bun.yml",
+            dest: "lefthook.yml",
+        });
+    } else {
+        v.push(FileSpec {
             src: "eslint.config.mjs",
             dest: "eslint.config.mjs",
-        },
-        FileSpec {
+        });
+        v.push(FileSpec {
             src: "prettierrc",
             dest: ".prettierrc",
-        },
-        FileSpec {
+        });
+        v.push(FileSpec {
             src: "prettierignore",
             dest: ".prettierignore",
-        },
+        });
+        v.push(FileSpec {
+            src: "lefthook.yml",
+            dest: "lefthook.yml",
+        });
+    }
+    v.extend([
         FileSpec {
             src: "Makefile",
             dest: "Makefile",
-        },
-        FileSpec {
-            src: "lefthook.yml",
-            dest: "lefthook.yml",
         },
         FileSpec {
             src: "gitignore",
             dest: ".gitignore",
         },
         FileSpec {
-            src: "nvmrc",
-            dest: ".nvmrc",
-        },
-        FileSpec {
             src: "README.md",
             dest: "README.md",
         },
-    ];
+    ]);
+    // `.nvmrc` pins a Node version; meaningless under the Bun runtime.
+    if !is_bun {
+        v.push(FileSpec {
+            src: "nvmrc",
+            dest: ".nvmrc",
+        });
+    }
     match cfg.test {
         TestFramework::Vitest => {
             v.push(FileSpec {
@@ -227,6 +302,12 @@ pub fn selected_files(cfg: &ScaffoldConfig) -> Vec<FileSpec> {
         TestFramework::Node => {
             v.push(FileSpec {
                 src: "index.node.test.ts",
+                dest: "src/index.test.ts",
+            });
+        }
+        TestFramework::Bun => {
+            v.push(FileSpec {
+                src: "index.bun.test.ts",
                 dest: "src/index.test.ts",
             });
         }
@@ -342,7 +423,7 @@ mod render_tests {
     #[test]
     fn current_year_is_reasonable() {
         let y = current_year();
-        assert!(y >= 2026 && y < 2100, "got {y}");
+        assert!((2026..2100).contains(&y), "got {y}");
     }
 }
 
@@ -424,8 +505,16 @@ mod pkg_tests {
     fn has_prepare_lefthook() {
         assert_eq!(
             json(&base())["scripts"]["prepare"],
-            serde_json::json!("lefthook install || true")
+            serde_json::json!("lefthook install")
         );
+    }
+
+    #[test]
+    fn no_git_omits_prepare_lefthook() {
+        let mut c = base();
+        c.git = false;
+        let v = json(&c);
+        assert!(v["scripts"].get("prepare").is_none());
     }
 
     #[test]

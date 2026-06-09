@@ -2,15 +2,16 @@
 # scaffolder installer
 #
 # Detects your OS and CPU architecture, downloads the matching prebuilt
-# binary from GitHub Releases, and installs it (default: /usr/local/bin).
-# Re-running this script updates an existing install in place.
+# binary from GitHub Releases, and installs it (default: ~/.local/bin).
+# If that directory isn't on your PATH, the script adds it to your shell's
+# startup file. Re-running this script updates an existing install in place.
 #
 # Quick start:
 #   curl -fsSL https://raw.githubusercontent.com/reedchan7/scaffolder/main/install.sh | sh
 #
 # Options (pass after `sh -s --` when piping):
 #   --version <tag>    install a specific release (e.g. v0.1.0); default: latest
-#   --bin-dir  <dir>   install location;            default: /usr/local/bin
+#   --bin-dir  <dir>   install location;            default: ~/.local/bin
 #   --help             show this help
 #
 # Environment overrides:
@@ -22,7 +23,7 @@ set -eu
 
 REPO="reedchan7/scaffolder"
 BIN="scaffolder"
-INSTALL_DIR="${SCAFFOLDER_INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${SCAFFOLDER_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${SCAFFOLDER_VERSION:-latest}"
 
 info() { printf '  %s\n' "$*" >&2; }
@@ -115,6 +116,43 @@ install_binary() {
   echo "$_dest"
 }
 
+# Make sure $1 is on PATH. If not, persist it to the right startup file for the
+# user's shell so new terminals pick it up. Idempotent: never appends twice.
+ensure_on_path() {
+  _dir="$1"
+
+  # Already visible in this session? Nothing to do.
+  case ":${PATH}:" in
+    *":${_dir}:"*) return 0 ;;
+  esac
+
+  # Pick the startup file + the line to add based on the login shell.
+  _shell="$(basename "${SHELL:-/bin/sh}")"
+  case "$_shell" in
+    zsh)  _rc="${ZDOTDIR:-$HOME}/.zshrc"; _line="export PATH=\"$_dir:\$PATH\"" ;;
+    bash) _rc="$HOME/.bashrc";            _line="export PATH=\"$_dir:\$PATH\"" ;;
+    fish) _rc="$HOME/.config/fish/config.fish"; _line="fish_add_path \"$_dir\"" ;;
+    *)    _rc="$HOME/.profile";           _line="export PATH=\"$_dir:\$PATH\"" ;;
+  esac
+
+  # Already persisted (just not loaded in this shell)? Tell the user to reload.
+  if [ -f "$_rc" ] && grep -qF "$_dir" "$_rc" 2>/dev/null; then
+    warn "$_dir is on your PATH in $_rc but not in this shell."
+    warn "  restart your terminal, or run: . \"$_rc\""
+    return 0
+  fi
+
+  # Append it. Best-effort: if we can't write the file, fall back to a hint.
+  if mkdir -p "$(dirname "$_rc")" 2>/dev/null &&
+     printf '\n# Added by scaffolder installer\n%s\n' "$_line" >> "$_rc" 2>/dev/null; then
+    info "added $_dir to your PATH in $_rc"
+    warn "restart your terminal, or run: . \"$_rc\""
+  else
+    warn "$_dir is not on your PATH and $_rc isn't writable. Add it manually:"
+    warn "  export PATH=\"$_dir:\$PATH\""
+  fi
+}
+
 main() {
   parse_args "$@"
 
@@ -147,11 +185,7 @@ main() {
 
   info ""
   info "installed: $("$dest" --version 2>/dev/null || echo "$BIN") -> $dest"
-  case ":${PATH}:" in
-    *":${INSTALL_DIR}:"*) : ;;
-    *) warn "${INSTALL_DIR} is not on your PATH. Add it, e.g.:"
-       warn "  export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
-  esac
+  ensure_on_path "$INSTALL_DIR"
   info "run 'scaffolder --help' to get started."
 }
 

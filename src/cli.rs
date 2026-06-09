@@ -32,8 +32,8 @@ pub struct NewArgs {
 
     #[arg(long, value_enum, default_value_t = PackageManager::Pnpm)]
     pub pm: PackageManager,
-    #[arg(long, value_enum, default_value_t = TestFramework::Vitest)]
-    pub test: TestFramework,
+    #[arg(long, value_enum)]
+    pub test: Option<TestFramework>,
     #[arg(long, value_enum, default_value_t = ModuleSystem::Esm)]
     pub module: ModuleSystem,
     /// Node major version (integer only, e.g. 24).
@@ -50,4 +50,9 @@ pub struct NewArgs {
     pub no_git: bool,
     #[arg(long = "no-install", default_value_t = false)]
     pub no_install: bool,
+    /// Parent directory to create the project in (default: current directory).
+    /// The project is placed in a `NAME` subdirectory inside it; intermediate
+    /// directories are created as needed.
+    #[arg(long, default_value = ".")]
+    pub dir: String,
 }

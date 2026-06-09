@@ -40,6 +40,7 @@ fn generates_default_project() {
     assert!(pkg.contains("\"private\": true"));
     assert!(pkg.contains("\"type\": \"module\""));
     assert!(pkg.contains("\"packageManager\": \"pnpm@11.5.2\""));
+    assert!(!pkg.contains("\"prepare\""));
     assert!(!root.join("CLAUDE.md").exists());
     assert!(!root.join("LICENSE").exists());
 }
@@ -194,4 +195,170 @@ fn list_prints_template() {
         .assert()
         .success()
         .stdout(predicate::str::contains("typescript-node"));
+}
+
+#[test]
+fn dir_flag_creates_in_given_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    run_new(
+        tmp.path(),
+        &[
+            "typescript-node",
+            "demo",
+            "--no-git",
+            "--no-install",
+            "--dir",
+            "nested/sub",
+        ],
+    )
+    .success();
+    assert!(tmp.path().join("nested/sub/demo/package.json").is_file());
+    // Nothing was created directly under the cwd.
+    assert!(!tmp.path().join("demo").exists());
+}
+
+#[test]
+fn bun_test_without_bun_pm_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    run_new(
+        tmp.path(),
+        &[
+            "typescript-node",
+            "demo",
+            "--no-git",
+            "--no-install",
+            "--pm",
+            "npm",
+            "--test",
+            "bun",
+        ],
+    )
+    .failure()
+    .stderr(predicate::str::contains("requires --pm bun"));
+}
+
+#[test]
+fn bun_pm_defaults_to_bun_runtime_and_test_runner() {
+    let tmp = tempfile::tempdir().unwrap();
+    run_new(
+        tmp.path(),
+        &[
+            "typescript-node",
+            "demo",
+            "--no-git",
+            "--no-install",
+            "--pm",
+            "bun",
+        ],
+    )
+    .success();
+
+    let root = tmp.path().join("demo");
+    assert!(!root.join(".nvmrc").exists());
+    assert!(!root.join("vitest.config.ts").exists());
+    assert!(root.join("biome.json").is_file());
+    assert!(!root.join("eslint.config.mjs").exists());
+    assert!(!root.join(".prettierrc").exists());
+    assert!(!root.join(".prettierignore").exists());
+
+    let pkg: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("package.json")).unwrap()).unwrap();
+    assert_eq!(pkg["packageManager"], serde_json::json!("bun@1.3.14"));
+    assert!(pkg.get("engines").is_none());
+    assert_eq!(
+        pkg["scripts"]["dev"],
+        serde_json::json!("bun --watch run src/index.ts")
+    );
+    assert_eq!(
+        pkg["scripts"]["build"],
+        serde_json::json!("bun build ./src/index.ts --outdir ./dist --target bun")
+    );
+    assert_eq!(
+        pkg["scripts"]["start"],
+        serde_json::json!("bun run src/index.ts")
+    );
+    assert_eq!(pkg["scripts"]["test"], serde_json::json!("bun test"));
+    assert_eq!(
+        pkg["scripts"]["typecheck"],
+        serde_json::json!("bun run --bun tsc --noEmit")
+    );
+    assert_eq!(
+        pkg["scripts"]["lint"],
+        serde_json::json!("bun run --bun biome lint .")
+    );
+    assert_eq!(
+        pkg["scripts"]["format"],
+        serde_json::json!("bun run --bun biome format --write .")
+    );
+    assert_eq!(
+        pkg["scripts"]["check"],
+        serde_json::json!("bun run --bun biome check . && bun run --bun tsc --noEmit && bun test")
+    );
+    let scripts = pkg["scripts"].as_object().unwrap();
+    assert!(
+        scripts
+            .values()
+            .all(|script| !script.as_str().unwrap().contains("node"))
+    );
+    assert!(pkg["devDependencies"].get("@biomejs/biome").is_some());
+    assert!(pkg["devDependencies"].get("@types/bun").is_some());
+    assert!(pkg["devDependencies"].get("@eslint/js").is_none());
+    assert!(pkg["devDependencies"].get("@types/node").is_none());
+    assert!(pkg["devDependencies"].get("eslint").is_none());
+    assert!(pkg["devDependencies"].get("prettier").is_none());
+    assert!(pkg["devDependencies"].get("tsx").is_none());
+    assert!(pkg["devDependencies"].get("typescript-eslint").is_none());
+    assert!(pkg["devDependencies"].get("vitest").is_none());
+    assert!(pkg["scripts"].get("prepare").is_none());
+
+    let tsconfig = std::fs::read_to_string(root.join("tsconfig.json")).unwrap();
+    assert!(tsconfig.contains(r#""types": ["bun"]"#));
+    assert!(tsconfig.contains(r#""moduleResolution": "bundler""#));
+    assert!(tsconfig.contains(r#""noEmit": true"#));
+    assert!(!tsconfig.contains(r#""outDir""#));
+
+    let test = std::fs::read_to_string(root.join("src/index.test.ts")).unwrap();
+    assert!(test.contains(r#"from "bun:test""#));
+    assert!(!test.contains("node:test"));
+    assert!(!test.contains("vitest"));
+}
+
+#[test]
+fn bun_pm_rejects_node_test_runner() {
+    let tmp = tempfile::tempdir().unwrap();
+    run_new(
+        tmp.path(),
+        &[
+            "typescript-node",
+            "demo",
+            "--no-git",
+            "--no-install",
+            "--pm",
+            "bun",
+            "--test",
+            "node",
+        ],
+    )
+    .failure()
+    .stderr(predicate::str::contains("requires --test bun"));
+}
+
+#[test]
+fn bun_pm_rejects_vitest_test_runner() {
+    let tmp = tempfile::tempdir().unwrap();
+    run_new(
+        tmp.path(),
+        &[
+            "typescript-node",
+            "demo",
+            "--no-git",
+            "--no-install",
+            "--pm",
+            "bun",
+            "--test",
+            "vitest",
+        ],
+    )
+    .failure()
+    .stderr(predicate::str::contains("requires --test bun"));
 }

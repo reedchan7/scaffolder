@@ -9,6 +9,10 @@ cargo-dist-version = "0.32.0"
 ci = "github"
 # The installers to generate for each app
 installers = ["shell", "powershell"]
+# Where the shell/powershell installers drop the binary. Unified with install.sh
+# and `make install` so every install path lands in the same place (no PATH
+# shadowing). Without this, dist defaults to CARGO_HOME (~/.cargo/bin).
+install-path = "~/.local/bin"
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu", "aarch64-pc-windows-msvc", "x86_64-pc-windows-msvc"]
 # Don't ship cargo-dist's standalone updater binary: it isn't available for

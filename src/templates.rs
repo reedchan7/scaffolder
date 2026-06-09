@@ -1,6 +1,6 @@
 use rust_embed::RustEmbed;
 
-/// All static template files for the TypeScript + Node.js scaffold.
+/// All static template files for the TypeScript runtime scaffold.
 #[derive(RustEmbed)]
 #[folder = "templates/typescript-node"]
 pub struct TsNodeTemplate;

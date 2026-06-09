@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    biome:
+      glob: "*.{ts,js,mjs,json,md,yml,yaml}"
+      run: bun run --bun biome check {staged_files}

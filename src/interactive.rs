@@ -20,14 +20,20 @@ pub fn prompt_config(args: &NewArgs) -> anyhow::Result<ScaffoldConfig> {
         ],
         args.pm,
     )?;
-    let test = select_enum(
-        "Test framework:",
-        &[
-            ("vitest", TestFramework::Vitest),
-            ("node", TestFramework::Node),
-        ],
-        args.test,
-    )?;
+    let test = if pm == PackageManager::Bun || args.test == Some(TestFramework::Bun) {
+        args.test
+            .unwrap_or_else(|| TestFramework::default_for_pm(pm))
+    } else {
+        select_enum(
+            "Test framework:",
+            &[
+                ("vitest", TestFramework::Vitest),
+                ("node", TestFramework::Node),
+            ],
+            args.test
+                .unwrap_or_else(|| TestFramework::default_for_pm(pm)),
+        )?
+    };
     let module = select_enum(
         "Module system:",
         &[("esm", ModuleSystem::Esm), ("cjs", ModuleSystem::Cjs)],

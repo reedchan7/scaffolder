@@ -10,13 +10,13 @@ help: ## Show this help
 install: ## Install dependencies
 	$(PM) install
 
-dev: ## Run in watch mode (tsx)
+dev: ## Run in watch mode
 	$(PM) run dev
 
 build: ## Compile to dist/
 	$(PM) run build
 
-start: ## Run the app (tsx, from source)
+start: ## Run the app (from source)
 	$(PM) run start
 
 typecheck: ## Type-check without emitting
@@ -25,7 +25,7 @@ typecheck: ## Type-check without emitting
 test: ## Run tests
 	$(PM) test
 
-lint: ## Lint with ESLint
+lint: ## Lint code
 	$(PM) run lint
 
 format: ## Format with Prettier

@@ -35,9 +35,17 @@ impl PackageManager {
 pub enum TestFramework {
     Vitest,
     Node,
+    Bun,
 }
 
 impl TestFramework {
+    pub fn default_for_pm(pm: PackageManager) -> Self {
+        match pm {
+            PackageManager::Bun => Self::Bun,
+            PackageManager::Pnpm | PackageManager::Npm | PackageManager::Yarn => Self::Vitest,
+        }
+    }
+
     pub fn test_script(self) -> &'static str {
         match self {
             Self::Vitest => "vitest run",
@@ -45,6 +53,8 @@ impl TestFramework {
             // commonjs, so compile first and test the emitted JS (works for
             // both esm and cjs).
             Self::Node => "tsc && node --test \"dist/**/*.test.js\"",
+            // Bun runs TS test files directly via its built-in runner.
+            Self::Bun => "bun test",
         }
     }
 }
@@ -110,6 +120,17 @@ pub struct ScaffoldConfig {
     pub install: bool,
 }
 
+impl ScaffoldConfig {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        match (self.pm, self.test) {
+            (PackageManager::Bun, TestFramework::Bun) => Ok(()),
+            (PackageManager::Bun, _) => anyhow::bail!("--pm bun requires --test bun"),
+            (_, TestFramework::Bun) => anyhow::bail!("--test bun requires --pm bun"),
+            _ => Ok(()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,11 +154,43 @@ mod tests {
 
     #[test]
     fn test_framework_script() {
+        assert_eq!(
+            TestFramework::default_for_pm(PackageManager::Pnpm),
+            TestFramework::Vitest
+        );
+        assert_eq!(
+            TestFramework::default_for_pm(PackageManager::Bun),
+            TestFramework::Bun
+        );
         assert_eq!(TestFramework::Vitest.test_script(), "vitest run");
         assert_eq!(
             TestFramework::Node.test_script(),
             "tsc && node --test \"dist/**/*.test.js\""
         );
+        assert_eq!(TestFramework::Bun.test_script(), "bun test");
+    }
+
+    #[test]
+    fn validates_bun_only_runtime_pairing() {
+        let mut cfg = ScaffoldConfig {
+            name: "demo".into(),
+            pm: PackageManager::Bun,
+            test: TestFramework::Bun,
+            module: ModuleSystem::Esm,
+            node: 24,
+            license: None,
+            ai: false,
+            git: false,
+            install: false,
+        };
+        assert!(cfg.validate().is_ok());
+
+        cfg.test = TestFramework::Vitest;
+        assert!(cfg.validate().is_err());
+
+        cfg.pm = PackageManager::Pnpm;
+        cfg.test = TestFramework::Bun;
+        assert!(cfg.validate().is_err());
     }
 
     #[test]

@@ -13,9 +13,10 @@ _PATCH := $(shell echo $(VERSION) | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\3
 # Extra args forwarded to `make run`, e.g. `make run ARGS="new typescript-node demo"`.
 ARGS ?=
 
-# Install location for `make install` / `uninstall`. Matches install.sh's default;
-# override like `make install BINDIR=$$HOME/.local/bin`.
-BINDIR ?= /usr/local/bin
+# Install location for `make install` / `uninstall`. Matches install.sh and the
+# cargo-dist installer so every install path agrees (no PATH shadowing).
+# Override like `make install BINDIR=/usr/local/bin`.
+BINDIR ?= $(HOME)/.local/bin
 
 .DEFAULT_GOAL := help
 .PHONY: help build run test fmt fmt-check lint check install uninstall dist \
@@ -45,7 +46,7 @@ lint: ## Lint with clippy (warnings are errors)
 
 check: fmt-check lint test ## Run everything CI runs (fmt + clippy + tests)
 
-install: build ## Build & install to /usr/local/bin (override: BINDIR=...)
+install: build ## Build & install to ~/.local/bin (override: BINDIR=...)
 	@if [ -w "$(BINDIR)" ] || { [ ! -e "$(BINDIR)" ] && mkdir -p "$(BINDIR)" 2>/dev/null; }; then \
 		install -m 0755 target/release/scaffolder "$(BINDIR)/scaffolder"; \
 	else \
@@ -54,7 +55,7 @@ install: build ## Build & install to /usr/local/bin (override: BINDIR=...)
 	fi
 	@echo "→ installed $$("$(BINDIR)/scaffolder" --version 2>/dev/null || echo scaffolder) to $(BINDIR)/scaffolder"
 
-uninstall: ## Remove scaffolder from /usr/local/bin (override: BINDIR=...)
+uninstall: ## Remove scaffolder from ~/.local/bin (override: BINDIR=...)
 	@if [ -w "$(BINDIR)" ]; then rm -f "$(BINDIR)/scaffolder"; else sudo rm -f "$(BINDIR)/scaffolder"; fi
 	@echo "→ removed $(BINDIR)/scaffolder"
 

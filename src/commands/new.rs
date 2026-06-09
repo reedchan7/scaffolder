@@ -14,9 +14,13 @@ pub fn run(args: NewArgs) -> anyhow::Result<()> {
         anyhow::bail!("unknown template {template:?}; available: {DEFAULT_TEMPLATE}");
     }
 
+    let dir = args.dir.clone();
     let cfg = build_config(args, name)?;
+    cfg.validate()?;
 
-    let target = std::env::current_dir()?.join(&cfg.name);
+    // Resolve the parent dir against the cwd (a relative `--dir` is relative to
+    // it; an absolute one wins), then place the project in a NAME subdirectory.
+    let target = std::env::current_dir()?.join(&dir).join(&cfg.name);
     scaffold::scaffold(&cfg, &target)?;
 
     if cfg.git {
@@ -26,7 +30,7 @@ pub fn run(args: NewArgs) -> anyhow::Result<()> {
         postops::install(&target, cfg.pm)?;
     }
 
-    print_next_steps(&cfg);
+    print_next_steps(&cfg, &dir);
     Ok(())
 }
 
@@ -63,7 +67,9 @@ fn build_config(args: NewArgs, name: Option<String>) -> anyhow::Result<ScaffoldC
         Some(raw) => Ok(ScaffoldConfig {
             name: normalize_package_name(&raw)?,
             pm: args.pm,
-            test: args.test,
+            test: args
+                .test
+                .unwrap_or_else(|| crate::config::TestFramework::default_for_pm(args.pm)),
             module: args.module,
             node: parse_node(&args.node)?,
             license: args.license,
@@ -74,10 +80,15 @@ fn build_config(args: NewArgs, name: Option<String>) -> anyhow::Result<ScaffoldC
     }
 }
 
-fn print_next_steps(cfg: &ScaffoldConfig) {
+fn print_next_steps(cfg: &ScaffoldConfig, dir: &str) {
     println!("\n{} {}\n", "Created".green().bold(), cfg.name.bold());
     println!("Next steps:");
-    println!("  cd {}", cfg.name);
+    let cd_path = if dir == "." || dir.is_empty() {
+        cfg.name.clone()
+    } else {
+        format!("{}/{}", dir.trim_end_matches('/'), cfg.name)
+    };
+    println!("  cd {cd_path}");
     if !cfg.install {
         println!("  {} install", cfg.pm.bin());
     }

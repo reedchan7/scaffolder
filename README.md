@@ -12,14 +12,16 @@
 correctly wired tooling, sensible defaults, and zero boilerplate to copy-paste. It ships as a
 single static binary with no runtime dependencies.
 
-The first template targets **TypeScript + Node.js**; more languages are on the way.
+The first template targets **TypeScript** with either a Node.js or Bun runtime; more languages are
+on the way.
 
 ## Highlights
 
 - **One command, ready to ship** — TypeScript (ESNext), ESLint + Prettier, Lefthook git hooks,
   a `Makefile`, and tests, all pre-wired.
 - **Interactive or scripted** — guided prompts for humans, flags for CI.
-- **Pick your stack** — choose your package manager, test runner, module system, and Node version.
+- **Pick your stack** — choose your package manager, runtime-aware test runner, module system, and
+  Node version when using the Node.js runtime.
 - **Cross-platform** — prebuilt binaries for macOS, Linux, and Windows (x86_64 & ARM64).
 - **Self-updating** — `scaffolder self-update` keeps you current.
 
@@ -32,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/reedchan7/scaffolder/main/install.s
 ```
 
 This detects your OS and CPU architecture, downloads the matching prebuilt binary, and installs
-it to `/usr/local/bin`. Re-run it any time to update.
+it to `~/.local/bin`. Re-run it any time to update.
 
 Customize the version or install location:
 
@@ -44,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/reedchan7/scaffolder/main/install.s
 | Option | Env var | Default |
 |--------|---------|---------|
 | `--version <tag>` | `SCAFFOLDER_VERSION` | `latest` |
-| `--bin-dir <dir>` | `SCAFFOLDER_INSTALL_DIR` | `/usr/local/bin` |
+| `--bin-dir <dir>` | `SCAFFOLDER_INSTALL_DIR` | `~/.local/bin` |
 
 ### Windows (PowerShell)
 
@@ -89,15 +91,19 @@ scaffolder self-update                       # update to the latest release
 | Flag | Default | Values |
 |------|---------|--------|
 | `--pm` | `pnpm` | `pnpm` `npm` `yarn` `bun` |
-| `--test` | `vitest` | `vitest` `node` |
+| `--test` | `vitest` (`bun` when `--pm bun`) | `vitest` `node` `bun` |
 | `--module` | `esm` | `esm` `cjs` |
-| `--node` | `24` | major version integer |
+| `--node` | `24` | major version integer; used by Node.js projects |
+| `--dir` | `.` | parent directory for the generated project |
 | `--license` | _(private)_ | `MIT` `Apache-2.0` |
 | `--ai` | off | flag — also writes `CLAUDE.md` + `AGENTS.md` |
 | `--no-git` | off | flag — skip `git init` |
 | `--no-install` | off | flag — skip dependency install |
 
 > Omit `--license` to keep the project private (no license file is written).
+>
+> `--pm bun` generates a Bun-runtime project: Bun scripts, Bun TypeScript settings, and Bun's
+> built-in test runner. `--test bun` is only valid with `--pm bun`.
 
 ## Update
 
@@ -115,7 +121,7 @@ Common tasks are wrapped in a `Makefile` — run `make help` to list them all:
 make build                              # release binary -> target/release/scaffolder
 make test                               # unit + integration tests
 make check                              # fmt + clippy + tests (what CI runs)
-make install                            # build & install to /usr/local/bin (override: BINDIR=...)
+make install                            # build & install to ~/.local/bin (override: BINDIR=...)
 make run ARGS="new typescript-node demo"
 ```
 
