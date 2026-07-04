@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::config::{License, ModuleSystem, PackageManager, TestFramework};
 
@@ -21,6 +21,51 @@ pub enum Command {
     List,
     /// Update scaffolder to the latest release.
     SelfUpdate,
+    /// Configure agent trust for the current project.
+    Agent(AgentArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct AgentArgs {
+    #[command(subcommand)]
+    pub command: AgentCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AgentCommand {
+    /// Trust the current project for one or more agents.
+    Trust(AgentTrustArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct AgentTrustArgs {
+    #[arg(value_enum, num_args = 1.., value_name = "AGENT")]
+    pub agents: Vec<AgentKind>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+pub enum AgentKind {
+    Claude,
+    Codex,
+    KimiCode,
+    Agy,
+    Reasonix,
+    #[value(alias = "pi-agent")]
+    Pi,
+}
+
+impl AgentKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+            Self::KimiCode => "kimi-code",
+            Self::Agy => "agy",
+            Self::Reasonix => "reasonix",
+            Self::Pi => "pi",
+        }
+    }
 }
 
 #[derive(Args, Debug)]

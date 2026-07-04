@@ -72,6 +72,7 @@ binary on your `PATH`:
 ```sh
 scaffolder new typescript-node my-app      # one-shot (CI friendly)
 scaffolder new                             # interactive
+scaffolder agent trust claude              # trust current project for an agent
 scaffolder list                            # show available templates
 ```
 
@@ -82,6 +83,7 @@ pass out of the box.
 
 ```sh
 scaffolder new [TEMPLATE] [NAME] [OPTIONS]   # scaffold a new project
+scaffolder agent trust <AGENT>...             # trust current project for one or more agents
 scaffolder list                              # list available templates
 scaffolder self-update                       # update to the latest release
 ```
@@ -104,6 +106,18 @@ scaffolder self-update                       # update to the latest release
 >
 > `--pm bun` generates a Bun-runtime project: Bun scripts, Bun TypeScript settings, and Bun's
 > built-in test runner. `--test bun` is only valid with `--pm bun`.
+
+### `agent trust`
+
+```sh
+scaffolder agent trust claude
+```
+
+Supported agents: `claude`, `codex`, `kimi-code`, `agy`, `reasonix`, `pi`.
+
+The command merges the needed trust or bypass-permission setting into the agent's documented local
+or user config file. Existing unrelated config is kept, and conflicting values prompt before being
+replaced.
 
 ## Update
 

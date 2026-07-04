@@ -10,6 +10,19 @@ fn run_new(dir: &std::path::Path, args: &[&str]) -> assert_cmd::assert::Assert {
         .assert()
 }
 
+fn run_scaffolder(
+    dir: &std::path::Path,
+    home: &std::path::Path,
+    args: &[&str],
+) -> assert_cmd::assert::Assert {
+    Command::cargo_bin("scaffolder")
+        .unwrap()
+        .current_dir(dir)
+        .env("HOME", home)
+        .args(args)
+        .assert()
+}
+
 #[test]
 fn generates_default_project() {
     let tmp = tempfile::tempdir().unwrap();
@@ -132,6 +145,140 @@ fn ai_flag_generates_guidelines() {
     let root = tmp.path().join("demo");
     assert!(root.join("CLAUDE.md").is_file());
     assert!(root.join("AGENTS.md").is_file());
+}
+
+#[test]
+fn agent_trust_claude_creates_local_settings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+
+    run_scaffolder(&project, &home, &["agent", "trust", "claude"]).success();
+
+    let settings = std::fs::read_to_string(project.join(".claude/settings.local.json")).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&settings).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "permissions": {
+                "defaultMode": "bypassPermissions"
+            }
+        })
+    );
+}
+
+#[test]
+fn agent_trust_claude_merges_existing_settings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".claude")).unwrap();
+    std::fs::write(
+        project.join(".claude/settings.local.json"),
+        r#"{"env":{"FOO":"bar"},"permissions":{"allow":["Read"]}}"#,
+    )
+    .unwrap();
+
+    run_scaffolder(&project, &home, &["agent", "trust", "claude"]).success();
+
+    let settings = std::fs::read_to_string(project.join(".claude/settings.local.json")).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&settings).unwrap();
+    assert_eq!(value["env"]["FOO"], "bar");
+    assert_eq!(value["permissions"]["allow"], serde_json::json!(["Read"]));
+    assert_eq!(
+        value["permissions"]["defaultMode"],
+        serde_json::json!("bypassPermissions")
+    );
+}
+
+#[test]
+fn agent_trust_writes_supported_agent_configs_without_dropping_existing_data() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+
+    std::fs::create_dir_all(home.join(".kimi-code")).unwrap();
+    std::fs::write(
+        home.join(".kimi-code/config.toml"),
+        "default_model = \"kimi-code/kimi-for-coding\"\n",
+    )
+    .unwrap();
+
+    std::fs::create_dir_all(home.join(".gemini/antigravity-cli")).unwrap();
+    std::fs::write(
+        home.join(".gemini/antigravity-cli/settings.json"),
+        r#"{"model":"Gemini","trustedWorkspaces":["/already"]}"#,
+    )
+    .unwrap();
+
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/trust.json"), r#"{"/already":false}"#).unwrap();
+
+    for agent in ["codex", "kimi-code", "agy", "reasonix", "pi"] {
+        run_scaffolder(&project, &home, &["agent", "trust", agent]).success();
+    }
+
+    let codex_project = std::fs::read_to_string(project.join(".codex/config.toml")).unwrap();
+    assert!(codex_project.contains("approval_policy = \"never\""));
+    assert!(codex_project.contains("sandbox_mode = \"danger-full-access\""));
+
+    let project_path = project.canonicalize().unwrap().display().to_string();
+    let codex_user = std::fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    assert!(codex_user.contains(&format!("[projects.\"{project_path}\"]")));
+    assert!(codex_user.contains("trust_level = \"trusted\""));
+
+    let kimi = std::fs::read_to_string(home.join(".kimi-code/config.toml")).unwrap();
+    assert!(kimi.contains("default_model = \"kimi-code/kimi-for-coding\""));
+    assert!(kimi.contains("default_permission_mode = \"yolo\""));
+
+    let agy: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(home.join(".gemini/antigravity-cli/settings.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(agy["model"], "Gemini");
+    assert_eq!(agy["toolPermission"], "always-proceed");
+    assert!(
+        agy["trustedWorkspaces"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(project_path))
+    );
+
+    let reasonix = std::fs::read_to_string(project.join("reasonix.toml")).unwrap();
+    assert!(reasonix.contains("[permissions]"));
+    assert!(reasonix.contains("mode = \"allow\""));
+
+    let pi: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(home.join(".pi/agent/trust.json")).unwrap())
+            .unwrap();
+    assert_eq!(pi["/already"], serde_json::json!(false));
+    assert_eq!(pi[project_path], serde_json::json!(true));
+}
+
+#[test]
+fn agent_trust_accepts_multiple_agents_in_one_command() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+
+    run_scaffolder(
+        &project,
+        &home,
+        &["agent", "trust", "claude", "reasonix", "pi"],
+    )
+    .success();
+
+    assert!(project.join(".claude/settings.local.json").is_file());
+    assert!(project.join("reasonix.toml").is_file());
+
+    let project_path = project.canonicalize().unwrap().display().to_string();
+    let pi: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(home.join(".pi/agent/trust.json")).unwrap())
+            .unwrap();
+    assert_eq!(pi[project_path], serde_json::json!(true));
 }
 
 #[test]
